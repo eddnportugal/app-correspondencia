@@ -19,6 +19,64 @@ interface DetalhesViewProps {
   readonly documentType?: "aviso" | "recibo";
 }
 
+/**
+ * Visualizador de PDF com fallback para mobile/Capacitor.
+ * Em iOS/Android/WebView, iframes com PDF geralmente não renderizam —
+ * então mostramos um card com botão grande para abrir o arquivo.
+ */
+function PdfViewer({ url, onAbrir }: { readonly url: string; readonly onAbrir: (e: React.MouseEvent) => void }) {
+  const [iframeFalhou, setIframeFalhou] = useState(false);
+
+  const ehMobile = (() => {
+    if (globalThis.window === undefined) return false;
+    const w = globalThis.window as any;
+    if (w.Capacitor?.isNativePlatform?.()) return true;
+    const ua = globalThis.navigator?.userAgent || "";
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  })();
+
+  // Em mobile/Capacitor, iframe de PDF não funciona — mostra CTA direto
+  if (ehMobile || iframeFalhou) {
+    return (
+      <div className="bg-white p-6 sm:p-8 rounded-xl shadow-sm max-w-xl w-full border border-gray-200 flex flex-col items-center text-center">
+        <div className="bg-green-50 p-4 rounded-full mb-4">
+          <FileDown size={48} className="text-[#057321]" />
+        </div>
+        <h2 className="text-lg font-bold text-gray-800 mb-2">
+          Comprovante em PDF
+        </h2>
+        <p className="text-sm text-gray-600 mb-5">
+          Toque no botão abaixo para abrir o PDF com os dados da correspondência.
+        </p>
+        <a
+          href={url}
+          onClick={onAbrir}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 bg-[#057321] hover:bg-[#04601c] text-white font-semibold px-6 py-3 rounded-full shadow-md transition w-full sm:w-auto justify-center"
+        >
+          <FileDown size={18} />
+          Abrir PDF
+        </a>
+        <p className="text-xs text-gray-400 mt-4 break-all">
+          Se o PDF não abrir, copie este link: <br />
+          <span className="font-mono">{url}</span>
+        </p>
+      </div>
+    );
+  }
+
+  // Desktop: tenta iframe, com detecção de falha
+  return (
+    <iframe
+      src={url}
+      className="w-full h-[80vh] bg-white"
+      title="Comprovante PDF"
+      onError={() => setIframeFalhou(true)}
+    />
+  );
+}
+
 export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
   const [loading, setLoading] = useState(true);
   const [dados, setDados] = useState<any>(null);
@@ -339,7 +397,7 @@ export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
                 Imprimir
               </button>
 
-              {!isTextOnly && !isPdf && dados?.urlFinal && (
+              {!isTextOnly && dados?.urlFinal && (
                 <a
                   href={dados.urlFinal}
                   onClick={handleAbrirArquivo}
@@ -388,11 +446,7 @@ export default function DetalhesView({ id, documentType }: DetalhesViewProps) {
 
             {/* PDF */}
             {isPdf && (
-              <iframe
-                src={dados.urlFinal}
-                className="w-full h-[80vh] bg-white"
-                title="Comprovante PDF"
-              />
+              <PdfViewer url={dados.urlFinal} onAbrir={handleAbrirArquivo} />
             )}
 
             {!isImage && !isPdf && !isTextOnly && (
